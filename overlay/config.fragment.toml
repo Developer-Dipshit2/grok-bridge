@@ -1,0 +1,47 @@
+[agent]
+system_prompt_label = "fuckoff-tri"
+
+[ui]
+max_thoughts_width = 120
+fork_secondary_model = "fuckoff"
+yolo = false
+compact_mode = false
+theme = "groknight"
+permission_mode = "always-approve"
+
+[ui.status_line]
+type = "command"
+command = "~/.grok/statusline.sh"
+refresh_interval = 15
+
+[privacy]
+privacy_banner_acked = "2026-09-21T00:47:59Z"
+
+[models]
+default = "fuckoff"
+
+[model.fuckoff]
+model = "fuckoff"
+base_url = "http://127.0.0.1:18789/v1"
+name = "fuckoff"
+description = "On-device 1.5B tri-manifold (A llama.cpp:8080 + B Ollama + C CAS sheaf). Zero cloud tokens."
+api_backend = "chat_completions"
+api_key = "local"
+temperature = 0.2
+max_completion_tokens = 1024
+context_window = 4096
+stream_tool_calls = false
+system_prompt_label = "fuckoff-tri"
+
+[model.local-grok]
+model = "fuckoff"
+base_url = "http://127.0.0.1:18789/v1"
+name = "fuckoff"
+description = "Alias of fuckoff (tri 1.5B)."
+api_backend = "chat_completions"
+api_key = "local"
+hidden = true
+temperature = 0.2
+max_completion_tokens = 1024
+context_window = 4096
+stream_tool_calls = false

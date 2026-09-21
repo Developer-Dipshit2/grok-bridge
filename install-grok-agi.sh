@@ -13,24 +13,22 @@ echo -e "${CYAN}================================================================
 
 if [ -z "$AGI_BASE_URL" ]; then
     if [ -t 0 ] || [ -c /dev/tty ]; then
-        read -r -p "Enter Base URL [default: http://127.0.0.1:11434/v1]: " INPUT_URL </dev/tty || true
-        AGI_BASE_URL="${INPUT_URL:-http://127.0.0.1:11434/v1}"
+        read -r -p "Enter Base URL [default: http://127.0.0.1:18789/v1]: " INPUT_URL </dev/tty || true
+        AGI_BASE_URL="${INPUT_URL:-http://127.0.0.1:18789/v1}"
     else
-        AGI_BASE_URL="http://127.0.0.1:11434/v1"
+        AGI_BASE_URL="http://127.0.0.1:18789/v1"
     fi
 fi
 
 if [ -z "$AGI_MODEL" ]; then
     if [ -t 0 ] || [ -c /dev/tty ]; then
-        read -r -p "Enter Model ID (e.g., llama3, mistral, qwen): " INPUT_MODEL </dev/tty || true
-        AGI_MODEL="$INPUT_MODEL"
+        read -r -p "Enter Model ID [default: fuckoff]: " INPUT_MODEL </dev/tty || true
+        AGI_MODEL="${INPUT_MODEL:-fuckoff}"
     fi
 fi
 
 if [ -z "$AGI_MODEL" ]; then
-    echo -e "${RED}[!] Error: Model ID is required.${NC}"
-    echo "    AGI_MODEL=llama3 bash $0"
-    exit 1
+    AGI_MODEL="fuckoff"
 fi
 
 if [ -z "$AGI_API_KEY" ]; then
@@ -70,7 +68,7 @@ if os.path.exists(CONFIG_PATH):
                 k, v = line.split("=", 1)
                 config[k] = v.strip('"').strip("'")
 
-base_url = os.environ.get("AGI_BASE_URL", config.get("AGI_BASE_URL", "http://127.0.0.1:11434/v1"))
+base_url = os.environ.get("AGI_BASE_URL", config.get("AGI_BASE_URL", "http://127.0.0.1:18789/v1"))
 model = os.environ.get("AGI_MODEL", config.get("AGI_MODEL", ""))
 api_key = os.environ.get("AGI_API_KEY", config.get("AGI_API_KEY", ""))
 

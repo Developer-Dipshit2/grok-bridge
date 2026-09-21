@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+CMD="$*"
+
+# Fast getprop direct lookup via /system/bin
+if [[ "$CMD" == getprop* ]] && [ -x "/system/bin/getprop" ]; then
+    PROP_NAME=$(echo "$CMD" | awk '{print $2}')
+    VAL=$(/system/bin/getprop "$PROP_NAME" 2>/dev/null || true)
+    if [ -n "$VAL" ]; then echo "$VAL"; exit 0; fi
+fi
+
+# Try rish execution
+if [ -x "/usr/local/bin/rish" ]; then
+    OUT=$(/usr/local/bin/rish -c "$CMD" 2>/dev/null || true)
+    if [ -n "$OUT" ]; then echo "$OUT"; exit 0; fi
+fi
+
+# Try local ADB loopback
+if adb devices 2>/dev/null | grep -q "device$"; then
+    adb shell "$CMD" 2>/dev/null && exit 0
+fi
+
+# Try direct Android shell binary
+if [ -x "/system/bin/sh" ]; then
+    /system/bin/sh -c "$CMD" 2>/dev/null && exit 0
+fi
+
+echo "0"
+exit 0

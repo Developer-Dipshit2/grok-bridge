@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+"""Unified local Grok multiplexer: A :8080 reflex | B :11434 plan | C CAS sheaf."""
+import json, os, re, subprocess, sys, threading, time, urllib.error, urllib.request
+
+sys.path.insert(0, "/root/local_grok")
+from agi_bridge import (  # noqa: E402
+    extract_exec, fast_path, plan_path, run_exec, stream_llama, triple, read_snapshot_clip,
+)
+
+
+def _read_toml(path):
+    try:
+        import toml
+        with open(path, "r", encoding="utf-8") as f:
+            return toml.load(f)
+    except ImportError:
+        import tomllib
+        with open(path, "rb") as f:
+            return tomllib.load(f)
+
+
+def _load_endpoints():
+    """Safe nested TOML: cfg['model']['fuckoff'] via .get — never KeyError on [model.fuckoff]."""
+    llama = os.environ.get("LOCAL_GROK_LLAMA", "")
+    engine = ""
+    api_key = os.environ.get("AGI_API_KEY", "")
+    try:
+        cfg = _read_toml(os.path.expanduser("~/.grok/config.toml"))
+        model_cfg = cfg.get("model", {}).get("fuckoff", {})
+        engine = model_cfg.get("base_url", "") or ""
+        api_key = model_cfg.get("api_key", "") or api_key
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+    envp = os.path.expanduser("~/.grok/config.env")
+    if os.path.isfile(envp):
+        for line in open(envp, encoding="utf-8"):
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            v = v.strip().strip('"').strip("'")
+            if k == "AGI_BASE_URL" and not engine:
+                engine = v
+            if k == "LOCAL_GROK_LLAMA" and not llama:
+                llama = v
+            if k == "AGI_API_KEY" and not api_key:
+                api_key = v
+    if not engine:
+        engine = os.environ.get("AGI_BASE_URL", "")
+    # A llama.cpp stays :8080. ENGINE is the tri mux at :18789 (not Ollama :11434, not raw :8080).
+    llama = (llama or "http://127.0.0.1:8080").rstrip("/")
+    engine = (engine or "http://127.0.0.1:18789/v1").rstrip("/")
+    if engine.endswith("/v1"):
+        engine_root = engine[:-3]
+    else:
+        engine_root = engine
+        engine = engine + "/v1"
+    os.environ.setdefault("AGI_API_KEY", api_key or "local")
+    return llama, engine_root, engine + "/chat/completions"
+
+
+LLAMA, ENGINE, ENDPOINT = _load_endpoints()
+FLAG_RE = re.compile(r"^!(fast|plan|sec|research|learn):\s*(.*)$", re.I | re.S)
+GAP_RE = re.compile(r"\b(CVE-\d{4}-\d+|knox|unrecognized|not implemented|unknown flag)\b", re.I)
+
+
+def _ok(url, t=1):
+    try:
+        urllib.request.urlopen(url, timeout=t)
+        return True
+    except Exception:
+        return False
+
+
+def ensure():
+    if not _ok(f"{LLAMA}/health"):
+        subprocess.Popen(
+            ["bash", "/root/local_agi_engine/start_engine.sh"],
+            stdout=open("/root/local_agi_engine/engine.log", "a"),
+            stderr=subprocess.STDOUT, start_new_session=True,
+        )
+        for _ in range(20):
+            time.sleep(1)
+            if _ok(f"{LLAMA}/health"):
+                break
+    if not _ok(f"{ENGINE}/health"):
+        subprocess.Popen(
+            [sys.executable, "/root/local_grok/engine.py", "serve"],
+            stdout=open("/root/local_grok/logs/daemon.log", "a"),
+            stderr=subprocess.STDOUT, start_new_session=True,
+        )
+        for _ in range(15):
+            time.sleep(0.3)
+            if _ok(f"{ENGINE}/health"):
+                break
+
+
+def exec_cmd(cmd):
+    print(f"\n\033[1;33m[EXEC]\033[0m {cmd}")
+    out = run_exec(cmd, allow=True)
+    print(out[:400])
+    return out
+
+
+def _engine_chat(prompt, depth=0):
+    payload = {
+        "model": "local-grok",
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+    }
+    req = urllib.request.Request(
+        ENDPOINT, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read().decode())
+        text = ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+        print(text)
+        if depth >= 2:
+            return
+        for cmd in re.findall(r"EXEC:\s*(.+)", text):
+            out = exec_cmd(cmd)
+            if out:
+                _engine_chat(f"EXEC result:\n{out[:400]}\nContinue.", depth + 1)
+    except urllib.error.URLError as e:
+        print(f"[!] engine down {ENGINE}: {e}", file=sys.stderr)
+
+
+def _consensus_footer(task, a_text=""):
+    try:
+        print("\n\033[0;36m-- sheaf --\033[0m")
+        print(triple(task, advanced=False, a_text=a_text or None))
+    except Exception as e:
+        print(f"[!] consensus: {e}", file=sys.stderr)
+
+
+def chat(prompt, depth=0, wait_consensus=True):
+    m = FLAG_RE.match(prompt.strip())
+    if m:
+        flag, rest = m.group(1).lower(), m.group(2).strip()
+        if flag == "fast":
+            print(fast_path(rest))
+            return
+        if flag == "plan":
+            print(plan_path(rest))
+            return
+        if flag in ("research", "learn"):
+            subprocess.run(
+                ["python3", os.path.expanduser("~/nexus_system/nexus_curiosity_engine.py"), rest],
+                check=False,
+            )
+            return
+        print(triple(rest, advanced=True))
+        return
+    low = prompt.strip()
+    if low.startswith("!research ") or low.startswith("!learn "):
+        topic = prompt.split(" ", 1)[1].strip()
+        subprocess.run(
+            ["python3", os.path.expanduser("~/nexus_system/nexus_curiosity_engine.py"), topic],
+            check=False,
+        )
+        return
+    if GAP_RE.search(prompt):
+        try:
+            sys.path.insert(0, os.path.expanduser("~/nexus_system"))
+            from nexus_curiosity_engine import queue_curiosity
+            queue_curiosity(prompt[:120])
+        except Exception:
+            pass
+    snap = read_snapshot_clip()
+    buf = []
+
+    def tok(t):
+        buf.append(t)
+        sys.stdout.write(t)
+        sys.stdout.flush()
+
+    a = stream_llama(f"BUS:\n{snap}\n\nTASK:\n{prompt}", on_token=tok)
+    sys.stdout.write("\n")
+    a_text = "".join(buf) or a
+    if wait_consensus:
+        _consensus_footer(prompt, a_text)
+        try:
+            obj = json.loads(open("/sdcard/Download/cas_mobile/nexus_memory_snapshot_master.json").read())
+            verdict = (obj.get("device_telemetry") or {}).get("defense_verdict", "NOMINAL")
+        except Exception:
+            verdict = "NOMINAL"
+        if verdict != "HALT":
+            for cmd in extract_exec(a_text):
+                exec_cmd(cmd)
+    else:
+        threading.Thread(target=_consensus_footer, args=(prompt, a_text), daemon=True).start()
+
+
+def main():
+    ensure()
+    if len(sys.argv) > 2 and sys.argv[1] == "-p":
+        chat(" ".join(sys.argv[2:]), wait_consensus=True)
+        return
+    if len(sys.argv) > 1 and sys.argv[1] != "-p":
+        chat(" ".join(sys.argv[1:]), wait_consensus=True)
+        return
+    print("fuckoff  A:8080 reflex | B:11434 plan | C:CAS sheaf  (0 cloud)")
+    print("flags: !fast: <cmd>  !plan: <goal>  !sec: <event>  !research <topic>  !learn <query>")
+    while True:
+        try:
+            p = input("fuckoff> ").strip()
+            if not p:
+                continue
+            if p.lower() in ("exit", "quit", "q"):
+                break
+            chat(p, wait_consensus=False)
+        except (KeyboardInterrupt, EOFError):
+            break
+
+
+if __name__ == "__main__":
+    main()

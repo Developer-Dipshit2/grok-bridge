@@ -1,37 +1,46 @@
 # grok-bridge
 
-CLI bridge from Grok-style commands (`grok-agi`, `-p`, `--think`) to your local or remote AGI over an OpenAI-compatible `/v1/chat/completions` endpoint.
+CLI bridge from Grok to the on-device **fuckoff** tri stack.
 
-## Install
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Developer-Dipshit2/grok-bridge/main/install-grok-agi.sh | bash
+```
+Grok CLI /model fuckoff
+  -> http://127.0.0.1:18789/v1
+  -> A llama.cpp :8080 (Qwen2.5-1.5B)
+  -> B Ollama :11434
+  -> C CAS sheaf
 ```
 
-Or clone and run:
+`cloud_tokens=0`. Do not point the CLI at `:8080` or `:11434` directly.
+
+## Install (this tree)
 
 ```bash
 git clone https://github.com/Developer-Dipshit2/grok-bridge.git
-bash grok-bridge/install-grok-agi.sh
+sudo install -m 755 grok-bridge/bin/grok-agi /usr/local/bin/grok-agi
+sudo install -m 755 grok-bridge/bin/android-cmd /usr/local/bin/android-cmd
+sudo install -m 755 grok-bridge/bin/nexus-md /usr/local/bin/nexus-md
 ```
 
-Non-interactive:
+Grok CLI overlay (model picker + skills + status line):
 
 ```bash
-AGI_BASE_URL='http://127.0.0.1:11434/v1' \
-AGI_MODEL='llama3' \
-AGI_API_KEY='' \
-bash install-grok-agi.sh
+bash grok-bridge/overlay/install.sh
 ```
+
+`overlay/install.sh` starts `/root/local_grok/start_unified.sh`, which wraps `/root/local_agi_engine/start_engine.sh` only if `:8080` is down.
 
 ## Use
 
 ```bash
-export PATH="$HOME/.grok/bin:$PATH"
-grok-agi
-grok-agi -p "Say hello from my AGI"
-grok-agi --think -p "Design a plan"
+nexus-md status
+grok-agi -p '!fast: getprop ro.boot.warranty_bit'
+grok-agi -p '!plan: summarize local defense state'
+grok-agi -p '!sec: honeyfile trip'
+/model fuckoff
 ```
 
-Config is written to `~/.grok/config.env`.
-Requires `bash`, `python3`, and a reachable AGI base URL.
+## Bounds
+
+- Nested TOML `[model.fuckoff]` is read with `.get("model", {}).get("fuckoff", {})`.
+- `android-cmd` fallback: getprop → rish → adb → `/system/bin/sh`.
+- Never construct `Orchestrator()`. Never cmake llama.cpp on an existing binary.

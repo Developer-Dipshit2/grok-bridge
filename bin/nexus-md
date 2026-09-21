@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Nexus Mode M-D 0.1.0-beta launcher. Does not cmake. Does not kill healthy :8080.
+set -e
+cmd="${1:-status}"
+shift || true
+case "$cmd" in
+  start)
+    bash /root/local_grok/start_unified.sh
+    ;;
+  status)
+    echo -n "8080  "; curl -sS --max-time 2 http://127.0.0.1:8080/health || echo down
+    echo
+    echo -n "18789 "; curl -sS --max-time 2 http://127.0.0.1:18789/health || echo down
+    echo
+    echo "llama-pid $(cat /root/local_agi_engine/llama-server.pid 2>/dev/null || echo none)"
+    echo "engine-pid $(cat /root/local_grok/local_grok.pid 2>/dev/null || echo none)"
+    echo "cli-model fuckoff  version 0.1.0-beta"
+    ;;
+  repl|fuckoff)
+    exec python3 /usr/local/bin/grok-agi "$@"
+    ;;
+  hub|nexus)
+    exec bash /root/nexus_system/nexus_master_control.sh
+    ;;
+  secops|defense)
+    exec python3 /root/nexus_system/nexus_omni_secops.py
+    ;;
+  hud|live)
+    exec python3 /root/nexus_system/live_device_hud.py
+    ;;
+  research|learn)
+    exec python3 /root/nexus_system/nexus_curiosity_engine.py "$@"
+    ;;
+  *)
+    echo "nexus-md 0.1.0-beta  {start|status|repl|hub|secops|hud|research}"
+    exit 2
+    ;;
+esac
